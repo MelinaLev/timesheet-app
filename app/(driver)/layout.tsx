@@ -60,12 +60,12 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
+        <aside className="w-full md:w-56 bg-white border-r border-gray-200 flex flex-row md:flex-col">
         <div className="p-5 border-b border-gray-200">
           <p className="font-bold text-lg text-gray-900">Long Star Trucking</p>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 flex flex-row md:flex-col gap-1 md:space-y-1">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.href}
