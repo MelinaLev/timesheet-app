@@ -68,36 +68,41 @@ export default function DriversPage() {
     setSaving(true)
     setError('')
 
-    const { data: { session } } = await supabase.auth.getSession()
+    try {
+        const { data: { session } } = await supabase.auth.getSession()
 
-    const res = await fetch('/api/admin/create-driver', {
+        const res = await fetch('/api/admin/create-driver', {
         method: 'POST',
         headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-        name: newName,
-        email: newEmail,
-        pin: newPin,
-        ownerOpId: newOwnerOpId,
+            name: newName,
+            email: newEmail,
+            pin: newPin,
+            ownerOpId: newOwnerOpId,
         }),
-    })
+        })
 
-    const result = await res.json()
-    setSaving(false)
+        const result = await res.json()
 
-    if (!res.ok) {
+        if (!res.ok) {
         setError(result.error || 'Something went wrong.')
         return
-    }
+        }
 
-    setNewName('')
-    setNewEmail('')
-    setNewPin('')
-    setNewOwnerOpId('')
-    setShowAddForm(false)
-    loadData()
+        setNewName('')
+        setNewEmail('')
+        setNewPin('')
+        setNewOwnerOpId('')
+        setShowAddForm(false)
+        loadData()
+    } catch (err) {
+        setError('Request failed. Check your connection and try again.')
+    } finally {
+        setSaving(false)
+    }
     }
 
   const startEdit = (driver: Driver) => {
