@@ -14,6 +14,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname()
   const [checking, setChecking] = useState(true)
   const [isDriver, setIsDriver] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     checkAccess()
@@ -59,17 +60,40 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
     )
   }
 
-  return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
-        <aside className="w-full md:w-56 bg-white border-r border-gray-200 flex flex-row md:flex-col">
-        <div className="p-5 border-b border-gray-200">
+ return (
+  <div className="min-h-screen bg-gray-100">
+    {/* Mobile top bar */}
+    <div className="md:hidden flex items-center justify-between bg-white border-b border-gray-200 px-4 py-3">
+      <p className="font-bold text-lg text-gray-900">Long Star Trucking</p>
+      <button
+        onClick={() => setMenuOpen(!menuOpen)}
+        className="text-gray-700 p-2"
+        aria-label="Menu"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+    </div>
+
+    <div className="flex">
+      {/* Sidebar: overlay on mobile when open, always visible on desktop */}
+      <aside
+        className={`${
+          menuOpen ? 'block' : 'hidden'
+        } md:block w-full md:w-56 bg-white border-r border-gray-200 flex-col fixed md:static top-[57px] md:top-0 left-0 right-0 bottom-0 z-20 md:z-auto`}
+      >
+        <div className="hidden md:block p-5 border-b border-gray-200">
           <p className="font-bold text-lg text-gray-900">Long Star Trucking</p>
         </div>
-        <nav className="flex-1 p-3 flex flex-row md:flex-col gap-1 md:space-y-1">
+        <nav className="p-3 space-y-1">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.href}
               href={item.href}
+              onClick={() => setMenuOpen(false)}
               className={`block rounded px-3 py-2 text-sm font-medium ${
                 pathname === item.href
                   ? 'bg-blue-600 text-white'
@@ -89,7 +113,9 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
           </button>
         </div>
       </aside>
+
       <main className="flex-1 overflow-x-auto px-4 py-8">{children}</main>
     </div>
-  )
+  </div>
+)
 }
