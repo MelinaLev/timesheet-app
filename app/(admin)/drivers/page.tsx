@@ -63,36 +63,33 @@ export default function DriversPage() {
     setLoading(false)
   }
 
-  const handleAdd = async (e: React.FormEvent) => {
+    const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
-    // Step 1: create the Auth login
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: newEmail,
-      password: newPin,
+    const { data: { session } } = await supabase.auth.getSession()
+
+    const res = await fetch('/api/admin/create-driver', {
+        method: 'POST',
+        headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+        name: newName,
+        email: newEmail,
+        pin: newPin,
+        ownerOpId: newOwnerOpId,
+        }),
     })
 
-    if (authError || !authData.user) {
-      setSaving(false)
-      setError(authError?.message || 'Could not create login.')
-      return
-    }
-
-    // Step 2: create the driver record linked to that login
-    const { error: driverError } = await supabase.from('drivers').insert({
-      name: newName,
-      active: true,
-      owner_operator_company_id: Number(newOwnerOpId),
-      auth_user_id: authData.user.id,
-    })
-
+    const result = await res.json()
     setSaving(false)
 
-    if (driverError) {
-      setError('Login created, but driver record failed: ' + driverError.message)
-      return
+    if (!res.ok) {
+        setError(result.error || 'Something went wrong.')
+        return
     }
 
     setNewName('')
@@ -101,7 +98,7 @@ export default function DriversPage() {
     setNewOwnerOpId('')
     setShowAddForm(false)
     loadData()
-  }
+    }
 
   const startEdit = (driver: Driver) => {
     setEditingId(driver.id)
