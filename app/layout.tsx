@@ -15,7 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Long Star Trucking — Timesheets",
   description: "Driver timesheet and reporting system",
-};
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Timesheets',
+  },
+}
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
