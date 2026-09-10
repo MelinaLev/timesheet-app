@@ -16,13 +16,25 @@ type Ticket = {
   trucks: { truck_number: string } | null
 }
 
+function parseLocalDate(dateStr: string) {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function formatLocalDate(d: Date) {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function getMonday(date: Date) {
   const d = new Date(date)
   const day = d.getDay()
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
   d.setHours(0, 0, 0, 0)
-  return d.toISOString().split('T')[0]
+  return formatLocalDate(d)
 }
 
 export default function MyTimesheetsPage() {
@@ -50,9 +62,9 @@ export default function MyTimesheetsPage() {
       return
     }
 
-    const sunday = new Date(start)
+    const sunday = parseLocalDate(start)
     sunday.setDate(sunday.getDate() + 6)
-    const sundayStr = sunday.toISOString().split('T')[0]
+    const sundayStr = formatLocalDate(sunday)
 
     const { data } = await supabase
       .from('timesheets')
@@ -71,11 +83,11 @@ export default function MyTimesheetsPage() {
     setLoading(false)
   }
 
-  const changeWeek = (direction: number) => {
-    const current = new Date(weekStart)
-    current.setDate(current.getDate() + direction * 7)
-    setWeekStart(getMonday(current))
-  }
+    const changeWeek = (direction: number) => {
+        const current = parseLocalDate(weekStart)
+        current.setDate(current.getDate() + direction * 7)
+        setWeekStart(getMonday(current))
+        }
 
   const totalHours = tickets.reduce((sum, t) => sum + Number(t.hours || 0), 0)
 

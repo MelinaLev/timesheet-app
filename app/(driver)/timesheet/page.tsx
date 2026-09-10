@@ -64,6 +64,9 @@ export default function TimesheetPage() {
   const [endTimeText, setEndTimeText] = useState('')
   const [notes, setNotes] = useState('')
 
+  const [showStartOptions, setShowStartOptions] = useState(false)
+  const [showEndOptions, setShowEndOptions] = useState(false)
+
 
   useEffect(() => {
     loadDriverInfo()
@@ -85,6 +88,16 @@ export default function TimesheetPage() {
         setHours(totalHours.toFixed(2))
     }
     }, [startTime, endTime])
+
+
+  useEffect(() => {
+    const closeDropdowns = () => {
+      setShowStartOptions(false)
+      setShowEndOptions(false)
+      }
+      document.addEventListener('click', closeDropdowns)
+      return () => document.removeEventListener('click', closeDropdowns)
+    }, [])
 
   const loadDriverInfo = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -192,11 +205,6 @@ export default function TimesheetPage() {
           onSubmit={handleSubmit}
           className="bg-white rounded-lg shadow p-6 space-y-4 border border-gray-200"
         >
-            <datalist id="time-options">
-                {TIME_OPTIONS.map((t) => (
-                    <option key={t.value} value={t.label} />
-                ))}
-                </datalist>
           <h1 className="text-xl font-bold text-gray-900">New Ticket</h1>
 
           <div>
@@ -292,41 +300,84 @@ export default function TimesheetPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-                <div>
-                    <label className="block text-sm font-semibold mb-1 text-gray-800">Start Time</label>
-                    <input
-                        type="text"
-                        list="time-options"
-                        value={startTimeText}
-                        onChange={(e) => {
-                        const typed = e.target.value
-                        setStartTimeText(typed)
-                        const match = TIME_OPTIONS.find(t => t.label.toLowerCase() === typed.toLowerCase())
-                        setStartTime(match ? match.value : '')
-                        }}
-                        placeholder="Type or select a time"
-                        required
-                        className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
-                    />
-                    </div>
-            <div>
-                <label className="block text-sm font-semibold mb-1 text-gray-800">End Time</label>
-                <input
-                    type="text"
-                    list="time-options"
-                    value={endTimeText}
-                    onChange={(e) => {
-                    const typed = e.target.value
-                    setEndTimeText(typed)
-                    const match = TIME_OPTIONS.find(t => t.label.toLowerCase() === typed.toLowerCase())
-                    setEndTime(match ? match.value : '')
-                    }}
-                    placeholder="Type or select a time"
-                    required
-                    className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
-                />
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <label className="block text-sm font-semibold mb-1 text-gray-800">Start Time</label>
+              <input
+                type="text"
+                value={startTimeText}
+                onFocus={() => setShowStartOptions(true)}
+                onChange={(e) => {
+                  const typed = e.target.value
+                  setStartTimeText(typed)
+                  setShowStartOptions(true)
+                  const match = TIME_OPTIONS.find(t => t.label.toLowerCase() === typed.toLowerCase())
+                  setStartTime(match ? match.value : '')
+                }}
+                placeholder="Type or select a time"
+                required
+                className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
+              />
+              {showStartOptions && (
+                <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg">
+                  {TIME_OPTIONS.filter(t =>
+                    t.label.toLowerCase().includes(startTimeText.toLowerCase())
+                  ).map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => {
+                        setStartTimeText(t.label)
+                        setStartTime(t.value)
+                        setShowStartOptions(false)
+                      }}
+                      className="block w-full text-left px-3 py-2 text-gray-900 hover:bg-blue-50"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
+              )}
             </div>
+
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <label className="block text-sm font-semibold mb-1 text-gray-800">End Time</label>
+              <input
+                type="text"
+                value={endTimeText}
+                onFocus={() => setShowEndOptions(true)}
+                onChange={(e) => {
+                  const typed = e.target.value
+                  setEndTimeText(typed)
+                  setShowEndOptions(true)
+                  const match = TIME_OPTIONS.find(t => t.label.toLowerCase() === typed.toLowerCase())
+                  setEndTime(match ? match.value : '')
+                }}
+                placeholder="Type or select a time"
+                required
+                className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
+              />
+              {showEndOptions && (
+                <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg">
+                  {TIME_OPTIONS.filter(t =>
+                    t.label.toLowerCase().includes(endTimeText.toLowerCase())
+                  ).map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => {
+                        setEndTimeText(t.label)
+                        setEndTime(t.value)
+                        setShowEndOptions(false)
+                      }}
+                      className="block w-full text-left px-3 py-2 text-gray-900 hover:bg-blue-50"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-semibold mb-1 text-gray-800">Total Hours</label>
