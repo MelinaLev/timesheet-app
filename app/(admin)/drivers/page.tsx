@@ -13,6 +13,7 @@ type Driver = {
   name: string
   active: boolean
   owner_operator_company_id: number
+  auth_user_id: string
   owner_op_companies: { name: string } | null
 }
 
@@ -35,6 +36,14 @@ export default function DriversPage() {
   const [editActive, setEditActive] = useState(true)
   const [editSaving, setEditSaving] = useState(false)
 
+
+  const [resetDriverId, setResetDriverId] = useState<number | null>(null)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetPin, setResetPin] = useState('')
+  const [resetSaving, setResetSaving] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const [resetSuccess, setResetSuccess] = useState('')
+
   useEffect(() => {
     loadData()
   }, [])
@@ -44,7 +53,7 @@ export default function DriversPage() {
     const [driversRes, ownerOpsRes] = await Promise.all([
       supabase
         .from('drivers')
-        .select('id, name, active, owner_operator_company_id, owner_op_companies ( name )')
+        .select('id, name, active, owner_operator_company_id, auth_user_id, owner_op_companies ( name )')
         .order('name'),
       supabase.from('owner_op_companies').select('id, name').order('name'),
     ])
@@ -128,6 +137,44 @@ export default function DriversPage() {
   const filtered = drivers.filter((d) =>
     d.name.toLowerCase().includes(search.toLowerCase())
   )
+
+    const handleReset = async (driver: Driver) => {
+    setResetSaving(true)
+    setResetError('')
+    setResetSuccess('')
+
+    try {
+        const { data: { session } } = await supabase.auth.getSession()
+
+        const res = await fetch('/api/admin/reset-driver-login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+            authUserId: driver.auth_user_id,
+            newEmail: resetEmail || undefined,
+            newPin: resetPin || undefined,
+        }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok) {
+        setResetError(result.error || 'Something went wrong.')
+        return
+        }
+
+        setResetSuccess('Login updated successfully.')
+        setResetEmail('')
+        setResetPin('')
+    } catch (err) {
+        setResetError('Request failed. Check your connection and try again.')
+    } finally {
+        setResetSaving(false)
+    }
+    }
 
   return (
     <div className="px-6 py-8">
@@ -301,6 +348,12 @@ export default function DriversPage() {
                         >
                         Edit
                         </button>
+                        <button
+                        onClick={() => { setResetDriverId(d.id); setResetEmail(''); setResetPin(''); setResetError(''); setResetSuccess('') }}
+                        className="text-sm text-orange-600 underline ml-3"
+                        >
+                        Reset Login
+                        </button>
                     </td>
                     </>
                 )}
@@ -310,6 +363,57 @@ export default function DriversPage() {
           </table>
         )}
       </div>
+        {resetDriverId !== null && (
+            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Reset Driver Login</h2>
+                <div className="space-y-3">
+                    <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-800">New Email (optional)</label>
+                    <input
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="Leave blank to keep current"
+                        className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
+                    />
+                    </div>
+                    <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-800">New PIN (optional)</label>
+                    <input
+                        type="text"
+                        value={resetPin}
+                        onChange={(e) => setResetPin(e.target.value)}
+                        minLength={6}
+                        placeholder="Leave blank to keep current"
+                        className="w-full rounded border border-gray-400 px-3 py-2 text-gray-900"
+                    />
+                    </div>
+                    {resetError && <p className="text-red-600 text-sm">{resetError}</p>}
+                    {resetSuccess && <p className="text-green-600 text-sm">{resetSuccess}</p>}
+                    <div className="flex gap-3 pt-2">
+                    <button
+                        onClick={() => {
+                        const driver = drivers.find(d => d.id === resetDriverId)
+                        if (driver) handleReset(driver)
+                        }}
+                        disabled={resetSaving}
+                        className="rounded bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {resetSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                        onClick={() => setResetDriverId(null)}
+                        className="rounded px-4 py-2 text-gray-700 font-medium hover:bg-gray-100"
+                    >
+                        Close
+                    </button>
+                    </div>
+                </div>
+                </div>
+            </div>
+            )}
+
     </div>
   )
 }
