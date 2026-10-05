@@ -19,6 +19,11 @@ type Ticket = {
   trucks: { truck_number: string } | null
 }
 
+type Company = {
+  id: number
+  name: string
+}
+
 function parseLocalDate(dateStr: string) {
   const [year, month, day] = dateStr.split('-').map(Number)
   return new Date(year, month - 1, day)
@@ -68,20 +73,35 @@ export default function MyTimesheetsPage() {
   const [editEndTimeText, setEditEndTimeText] = useState('')
   const [showEditStartOptions, setShowEditStartOptions] = useState(false)
   const [showEditEndOptions, setShowEditEndOptions] = useState(false)
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [editCompanyText, setEditCompanyText] = useState('')
+  const [showEditCompanyOptions, setShowEditCompanyOptions] = useState(false)
 
 
   useEffect(() => {
     loadTickets(weekStart)
   }, [weekStart])
 
-  useEffect(() => {
-  const closeDropdowns = () => {
-    setShowEditStartOptions(false)
-    setShowEditEndOptions(false)
-  }
-  document.addEventListener('click', closeDropdowns)
-  return () => document.removeEventListener('click', closeDropdowns)
-}, [])
+useEffect(() => {
+    const closeDropdowns = () => {
+        setShowEditStartOptions(false)
+        setShowEditEndOptions(false)
+        setShowEditCompanyOptions(false)
+    }
+    document.addEventListener('click', closeDropdowns)
+    return () => document.removeEventListener('click', closeDropdowns)
+    }, [])
+
+    useEffect(() => {
+    const loadCompanies = async () => {
+        const { data } = await supabase
+        .from('companies')
+        .select('id, name')
+        .order('name')
+        if (data) setCompanies(data)
+    }
+    loadCompanies()
+    }, [])
 
   const loadTickets = async (start: string) => {
     setLoading(true)
@@ -139,6 +159,7 @@ export default function MyTimesheetsPage() {
         const endMatch = TIME_OPTIONS.find(o => o.value === t.end_time?.slice(0, 5))
         setEditStartTimeText(startMatch?.label || '')
         setEditEndTimeText(endMatch?.label || '')
+        setEditCompanyText(t.companies?.name || t.new_company_name || '')
         }
 
     useEffect(() => {
@@ -157,6 +178,10 @@ export default function MyTimesheetsPage() {
 
         const saveEdit = async (id: number) => {
             setSaving(true)
+            const typedCompany = editCompanyText.trim()
+            const matchedCompany = companies.find(
+                (c) => c.name.toLowerCase() === typedCompany.toLowerCase()
+            )
             const { error } = await supabase
                 .from('timesheets')
                 .update({
@@ -167,6 +192,8 @@ export default function MyTimesheetsPage() {
                 end_time: editEndTime,
                 hours: Number(editHours),
                 notes: editNotes || null,
+                company_id: matchedCompany ? matchedCompany.id : null,
+                new_company_name: matchedCompany ? null : (typedCompany || null),
                 })
                 .eq('id', id)
 
@@ -222,7 +249,41 @@ export default function MyTimesheetsPage() {
                 <div key={t.id} className="border border-gray-200 rounded p-3">
                 {editingId === t.id ? (
                     <div className="space-y-2">
-                    <div>
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        <label className="block text-xs font-semibold text-gray-700">Company</label>
+                        <input
+                            type="text"
+                            value={editCompanyText}
+                            onFocus={() => setShowEditCompanyOptions(true)}
+                            onChange={(e) => {
+                            setEditCompanyText(e.target.value)
+                            setShowEditCompanyOptions(true)
+                            }}
+                            placeholder="Type to search companies..."
+                            className="w-full rounded border border-gray-400 px-2 py-1 text-gray-900 text-sm"
+                        />
+                        {showEditCompanyOptions && (
+                            <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg">
+                            {companies
+                                .filter((c) => c.name.toLowerCase().includes(editCompanyText.toLowerCase()))
+                                .map((c) => (
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => {
+                                    setEditCompanyText(c.name)
+                                    setShowEditCompanyOptions(false)
+                                    }}
+                                    className="block w-full text-left px-2 py-1.5 text-sm text-gray-900 hover:bg-blue-50"
+                                >
+                                    {c.name}
+                                </button>
+                                ))}
+                            </div>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">Not in the list? Just type the company name.</p>
+                        </div>    
+                                            <div>
                         <label className="block text-xs font-semibold text-gray-700">Date</label>
                         <input
                         type="date"
