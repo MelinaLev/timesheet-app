@@ -1,200 +1,209 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type TimesheetRow = {
   id: number
+  driver_id: number
+  truck_id: number | null
+  company_id: number | null
   date: string
   ticket_number: string
   location: string
   start_time: string
   end_time: string
   hours: number
-  status: string
+  notes: string | null
+  new_company_name: string | null
   submitted_at: string
   drivers: { name: string } | null
   trucks: { truck_number: string } | null
   companies: { name: string } | null
-  new_company_name: string | null
-  notes: string | null
 }
 
-function getWeekStart(date: Date) {
+type Truck = { id: number; truck_number: string }
+type Company = { id: number; name: string }
+
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4)
+  const m = (i % 4) * 15
+  const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  const displayHour = h % 12 === 0 ? 12 : h % 12
+  const label = `${displayHour}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+  return { value, label }
+})
+
+function parseLocalDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function formatLocalDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getMonday(date: Date) {
   const d = new Date(date)
-  const day = d.getDay() // 0 = Sunday, 1 = Monday, ... 6 = Saturday
-  const diff = day === 0 ? -6 : 1 - day // shift Sunday back to previous Monday
-  d.setDate(d.getDate() + diff)
+  const day = d.getDay()
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day))
   d.setHours(0, 0, 0, 0)
-  return d
+  return formatLocalDate(d)
 }
 
-function formatDate(d: Date) {
-  return d.toISOString().split('T')[0]
+function calcHours(start: string, end: string) {
+  if (!start || !end) return ''
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  let s = sh * 60 + sm
+  let e = eh * 60 + em
+  if (e < s) e += 24 * 60
+  return ((e - s) / 60).toFixed(2)
 }
 
-export default function DashboardPage() {
-  const router = useRouter()
+export default function TimesheetsPage() {
   const [rows, setRows] = useState<TimesheetRow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [trucks, setTrucks] = useState<Truck[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [loading, setLoading] = useState(true)
+  const [weekStart, setWeekStart] = useState(getMonday(new Date()))
   const [expandedTruck, setExpandedTruck] = useState<string | null>(null)
 
-  const [weekStart, setWeekStart] = useState(formatDate(getWeekStart(new Date())))
+  // edit modal state
+  const [editing, setEditing] = useState<TimesheetRow | null>(null)
+  const [editDate, setEditDate] = useState('')
+  const [editTruckId, setEditTruckId] = useState('')
+  const [editCompanyText, setEditCompanyText] = useState('')
+  const [editTicketNumber, setEditTicketNumber] = useState('')
+  const [editLocation, setEditLocation] = useState('')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  
+  useEffect(() => {
+    loadWeek(weekStart)
+  }, [weekStart])
 
-  const truckSummaries = rows.reduce((acc, r) => {
-    const key = r.trucks?.truck_number || 'Unknown'
-    if (!acc[key]) {
-        acc[key] = { truckNumber: key, totalHours: 0, ticketCount: 0, rows: [] as TimesheetRow[] }
+  useEffect(() => {
+    const loadLists = async () => {
+      const [trucksRes, companiesRes] = await Promise.all([
+        supabase.from('trucks').select('id, truck_number').order('truck_number'),
+        supabase.from('companies').select('id, name').order('name'),
+      ])
+      if (trucksRes.data) setTrucks(trucksRes.data)
+      if (companiesRes.data) setCompanies(companiesRes.data)
     }
-    acc[key].totalHours += Number(r.hours || 0)
-    acc[key].ticketCount += 1
-    acc[key].rows.push(r)
-    return acc
-    }, {} as Record<string, { truckNumber: string; totalHours: number; ticketCount: number; rows: TimesheetRow[] }>)
-
-    const truckList = Object.values(truckSummaries).sort((a, b) => a.truckNumber.localeCompare(b.truckNumber))
+    loadLists()
+  }, [])
 
   const loadWeek = async (start: string) => {
     setLoading(true)
-    const startDate = new Date(start)
-    const endDate = new Date(startDate)
-    endDate.setDate(endDate.getDate() + 6)
+    const end = parseLocalDate(start)
+    end.setDate(end.getDate() + 6)
 
     const { data, error } = await supabase
       .from('timesheets')
       .select(`
-        id, date, ticket_number, location, start_time, end_time, hours, status, submitted_at,
-        new_company_name,
+        id, driver_id, truck_id, company_id, date, ticket_number, location,
+        start_time, end_time, hours, notes, new_company_name, submitted_at,
         drivers ( name ),
         trucks ( truck_number ),
-        companies ( name ), 
-        notes
+        companies ( name )
       `)
       .gte('date', start)
-      .lte('date', formatDate(endDate))
-      .order('date', { ascending: true })
+      .lte('date', formatLocalDate(end))
 
     if (!error && data) {
-      setRows(data as unknown as TimesheetRow[])
+      const sorted = (data as unknown as TimesheetRow[]).sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date)
+        return a.ticket_number.localeCompare(b.ticket_number, undefined, { numeric: true })
+      })
+      setRows(sorted)
     }
     setLoading(false)
   }
 
   const changeWeek = (direction: number) => {
-    const current = new Date(weekStart)
+    const current = parseLocalDate(weekStart)
     current.setDate(current.getDate() + direction * 7)
-    const newStart = formatDate(current)
-    setWeekStart(newStart)
-    loadWeek(newStart)
+    setWeekStart(getMonday(current))
   }
 
+  const startEdit = (r: TimesheetRow) => {
+    setEditing(r)
+    setEditDate(r.date)
+    setEditTruckId(r.truck_id ? String(r.truck_id) : '')
+    setEditCompanyText(r.companies?.name || r.new_company_name || '')
+    setEditTicketNumber(r.ticket_number)
+    setEditLocation(r.location)
+    setEditStart(r.start_time?.slice(0, 5) || '')
+    setEditEnd(r.end_time?.slice(0, 5) || '')
+    setEditNotes(r.notes || '')
+    setEditError('')
+  }
 
+  const saveEdit = async () => {
+    if (!editing) return
+    setSaving(true)
+    setEditError('')
 
-  const totalHours = rows.reduce((sum, r) => sum + Number(r.hours || 0), 0)
+    const typed = editCompanyText.trim()
+    const matched = companies.find((c) => c.name.toLowerCase() === typed.toLowerCase())
 
-  return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Timesheets</h1>
-            <div className="flex gap-4 items-center">
-                <a href="/reports" className="text-sm text-blue-600 underline">Reports</a>
-            </div>
-        </div>
+    const { error } = await supabase
+      .from('timesheets')
+      .update({
+        date: editDate,
+        truck_id: editTruckId ? Number(editTruckId) : null,
+        company_id: matched ? matched.id : null,
+        new_company_name: matched ? null : typed || null,
+        ticket_number: editTicketNumber,
+        location: editLocation,
+        start_time: editStart,
+        end_time: editEnd,
+        hours: Number(calcHours(editStart, editEnd)),
+        notes: editNotes || null,
+      })
+      .eq('id', editing.id)
 
-        <div className="bg-white rounded-lg shadow p-4 mb-4 border border-gray-200 flex items-center justify-between">
-          <button
-            onClick={() => changeWeek(-1)}
-            className="px-3 py-1.5 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300"
-          >
-            ← Previous Week
-          </button>
-          <div className="text-center">
-            <p className="font-semibold text-gray-900">Week of {weekStart}</p>
-            <p className="text-sm text-gray-600">Total hours: {totalHours.toFixed(2)}</p>
-          </div>
-          <button
-            onClick={() => changeWeek(1)}
-            className="px-3 py-1.5 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300"
-          >
-            Next Week →
-          </button>
-        </div>
+    setSaving(false)
 
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-            {loading ? (
-                <p className="p-4 text-gray-600">Loading timesheets...</p>
-            ) : truckList.length === 0 ? (
-                <p className="p-4 text-gray-600">No timesheets submitted for this week.</p>
-            ) : (
-                <div className="divide-y divide-gray-100">
-                {truckList.map((t) => (
-                    <div key={t.truckNumber}>
-                    <button
-                        onClick={() => setExpandedTruck(expandedTruck === t.truckNumber ? null : t.truckNumber)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-left"
-                    >
-                        <div className="flex items-center gap-4">
-                        <span className="font-semibold text-gray-900">Truck {t.truckNumber}</span>
-                        <span className="text-sm text-gray-600">{t.ticketCount} ticket{t.ticketCount !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-gray-900">{t.totalHours.toFixed(2)} hrs</span>
-                        <span className="text-gray-400">{expandedTruck === t.truckNumber ? '▲' : '▼'}</span>
-                        </div>
-                    </button>
+    if (error) {
+      setEditError('Could not save: ' + error.message)
+      return
+    }
 
-                    {expandedTruck === t.truckNumber && (
-                        <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                            <tr>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Date</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Driver</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Company</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Location</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Ticket #</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Start</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">End</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Hours</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
-                                <th className="text-left p-3 text-gray-700 font-semibold">Submitted</th>
+    setEditing(null)
+    loadWeek(weekStart)
+  }
 
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {t.rows.map((r) => (
-                                <tr key={r.id} className="border-b border-gray-100">
-                                <td className="p-3 text-gray-900">{r.date}</td>
-                                <td className="p-3 text-gray-900">{r.drivers?.name || '—'}</td>
-                                <td className="p-3 text-gray-900">
-                                    {r.companies?.name || r.new_company_name || '—'}
-                                    {!r.companies?.name && r.new_company_name && (
-                                    <span className="ml-1 text-xs text-orange-600 font-medium">(new)</span>
-                                    )}
-                                </td>
-                                <td className="p-3 text-gray-900">{r.location}</td>
-                                <td className="p-3 text-gray-900">{r.ticket_number}</td>
-                                <td className="p-3 text-gray-900">{r.start_time}</td>
-                                <td className="p-3 text-gray-900">{r.end_time}</td>
-                                <td className="p-3 text-gray-900">{r.hours}</td>
-                                <td className="p-3 text-gray-900">{r.notes || '—'}</td>
-                                <td className="p-3 text-gray-600 text-xs">{new Date(r.submitted_at).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                        </div>
-                    )}
-                    </div>
-                ))}
-                </div>
-            )}
-            </div>
-      </div>
-    </div>
-  )
-}
+  const handleDelete = async (r: TimesheetRow) => {
+    const ok = confirm(
+      `Delete ticket #${r.ticket_number} (${r.drivers?.name || 'unknown driver'}, ${r.date})? This cannot be undone.`
+    )
+    if (!ok) return
+
+    setDeletingId(r.id)
+    const { error } = await supabase.from('timesheets').delete().eq('id', r.id)
+    setDeletingId(null)
+
+    if (error) {
+      alert('Could not delete: ' + error.message)
+      return
+    }
+    loadWeek(weekStart)
+  }
+
+  // Duplicate detection: same driver + same ticket number more than once
+  const keyOf = (r: TimesheetRow) => `${r.driver_id}|${r.ticket_number.trim().toLowerCase()}`
+  const keyCounts = rows.reduce((acc, r) => {
+    acc[keyOf(r)] = (acc[keyOf(r)] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  const isDuplicate = (r: TimesheetRow) => keyCounts[keyOf(r)] > 1
+  const duplicateCount = rows.filter(isDuplicate).length
+
+  const totalHours =
