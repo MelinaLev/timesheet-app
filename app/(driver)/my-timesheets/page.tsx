@@ -45,6 +45,14 @@ function getMonday(date: Date) {
   return formatLocalDate(d)
 }
 
+function displayDate(dateStr: string) {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 const TIME_OPTIONS = Array.from({ length: 96 }, (_, i) => {
   const hours = Math.floor(i / 4)
   const minutes = (i % 4) * 15
@@ -227,8 +235,8 @@ useEffect(() => {
           ← Previous Week
         </button>
         <div className="text-center">
-          <p className="font-semibold text-gray-900">Week of {weekStart}</p>
-          <p className="text-sm text-gray-600">Total hours: {totalHours.toFixed(2)}</p>
+          <p className="font-semibold text-gray-900">Week of <span translate="no">{weekStart}</span></p>
+          <p className="text-sm text-gray-600">Total hours: <span translate="no">{totalHours.toFixed(2)}</span></p>
         </div>
         <button
           onClick={() => changeWeek(1)}
@@ -421,15 +429,15 @@ useEffect(() => {
                     </div>
                 ) : (
                     <>
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="font-semibold text-gray-900">{t.date}</span>
-                        <span className="text-sm font-medium text-gray-900">{t.hours} hrs</span>
+                   <div className="flex justify-between items-center mb-1">
+                        <span className="font-semibold text-gray-900" translate="no">{displayDate(t.date)}</span>
+                        <span className="text-sm font-medium text-gray-900"><span translate="no">{t.hours}</span> hrs</span>
                     </div>
                     <p className="text-sm text-gray-700">
                         {t.companies?.name || t.new_company_name} — {t.location}
                     </p>
                     <p className="text-xs text-gray-500">
-                        Truck {t.trucks?.truck_number} · Ticket #{t.ticket_number} · {t.start_time}–{t.end_time}
+                        Truck <span translate="no">{t.trucks?.truck_number}</span> · Ticket #<span translate="no">{t.ticket_number}</span> · <span translate="no">{t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}</span>
                     </p>
                     {t.notes && <p className="text-xs text-gray-500 mt-1">Notes: {t.notes}</p>}
                     <div className="flex gap-3 mt-2">
