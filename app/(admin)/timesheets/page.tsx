@@ -14,12 +14,14 @@ type TimesheetRow = {
   start_time: string
   end_time: string
   hours: number
-  notes: string | null
+  notes: string | null 
+  verified: boolean
   new_company_name: string | null
   submitted_at: string
   drivers: { name: string } | null
   trucks: { truck_number: string } | null
   companies: { name: string } | null
+
 }
 
 type Truck = { id: number; truck_number: string }
@@ -111,7 +113,7 @@ export default function TimesheetsPage() {
         start_time, end_time, hours, notes, new_company_name, submitted_at,
         drivers ( name ),
         trucks ( truck_number ),
-        companies ( name )
+        companies ( name ), verified
       `)
       .gte('date', start)
       .lte('date', formatLocalDate(end))
@@ -197,6 +199,22 @@ export default function TimesheetsPage() {
     loadWeek(weekStart)
   }
 
+  const toggleVerified = async (r: TimesheetRow) => {
+  const next = !r.verified
+  setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, verified: next } : x)))
+
+  const { error } = await supabase
+    .from('timesheets')
+    .update({ verified: next })
+    .eq('id', r.id)
+
+  if (error) {
+    setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, verified: !next } : x)))
+    alert('Could not update: ' + error.message)
+  }
+}
+  
+
   // Duplicate detection: same driver + same ticket number more than once
   const keyOf = (r: TimesheetRow) => `${r.driver_id}|${r.ticket_number.trim().toLowerCase()}`
   const keyCounts = rows.reduce((acc, r) => {
@@ -208,6 +226,8 @@ export default function TimesheetsPage() {
 
   const totalHours = rows.reduce((sum, r) => sum + Number(r.hours || 0), 0)
 
+  const verifiedTotal = rows.filter((r) => r.verified).length
+
   const truckSummaries = rows.reduce((acc, r) => {
     const key = r.trucks?.truck_number || 'Unknown'
     if (!acc[key]) acc[key] = { truckNumber: key, totalHours: 0, ticketCount: 0, hasDuplicate: false, rows: [] as TimesheetRow[] }
@@ -218,9 +238,16 @@ export default function TimesheetsPage() {
     return acc
   }, {} as Record<string, { truckNumber: string; totalHours: number; ticketCount: number; hasDuplicate: boolean; rows: TimesheetRow[] }>)
 
-  const truckList = Object.values(truckSummaries).sort((a, b) =>
-    a.truckNumber.localeCompare(b.truckNumber, undefined, { numeric: true })
-  )
+  const truckList = Object.values(truckSummaries)
+    .map((t) => {
+      const verifiedCount = t.rows.filter((r) => r.verified).length
+      return {
+        ...t,
+        verifiedCount,
+        allVerified: t.rows.length > 0 && verifiedCount === t.rows.length,
+      }
+    })
+    .sort((a, b) => a.truckNumber.localeCompare(b.truckNumber, undefined, { numeric: true }))
 
   return (
     <div className="px-6 py-8">
@@ -236,6 +263,7 @@ export default function TimesheetsPage() {
         <div className="text-center">
           <p className="font-semibold text-gray-900">Week of {weekStart}</p>
           <p className="text-sm text-gray-600">Total hours: {totalHours.toFixed(2)}</p>
+          <p className="text-sm text-gray-600">Verified: {verifiedTotal} of {rows.length} tickets</p>
         </div>
         <button
           onClick={() => changeWeek(1)}
@@ -263,7 +291,9 @@ export default function TimesheetsPage() {
               <Fragment key={t.truckNumber}>
                 <button
                   onClick={() => setExpandedTruck(expandedTruck === t.truckNumber ? null : t.truckNumber)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-left"
+                  className={`w-full flex items-center justify-between p-4 text-left ${
+                    t.allVerified ? 'bg-green-100 hover:bg-green-200' : 'hover:bg-gray-50'
+                  }`}
                 >
                   <div className="flex items-center gap-4">
                     <span className="font-semibold text-gray-900">Truck {t.truckNumber}</span>
@@ -275,6 +305,12 @@ export default function TimesheetsPage() {
                         Possible duplicate
                       </span>
                     )}
+                    <span className={`text-xs font-medium rounded px-2 py-0.5 ${
+                        t.allVerified ? 'text-green-800 bg-green-200' : 'text-gray-600 bg-gray-100'
+                      }`}>
+                        {t.allVerified ? '✓ Complete' : `${t.verifiedCount}/${t.ticketCount} verified`}
+                      </span>
+                                        
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-900">{t.totalHours.toFixed(2)} hrs</span>
@@ -287,7 +323,7 @@ export default function TimesheetsPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          {['Date', 'Driver', 'Company', 'Location', 'Ticket #', 'Start', 'End', 'Hours', 'Notes', 'Submitted', 'Actions'].map((h) => (
+                          {['Verified', 'Date', 'Driver', 'Company', 'Location', 'Ticket #', 'Start', 'End', 'Hours', 'Notes', 'Submitted', 'Actions'].map((h) => (
                             <th key={h} className="text-left p-3 text-gray-700 font-semibold">{h}</th>
                           ))}
                         </tr>
@@ -296,8 +332,18 @@ export default function TimesheetsPage() {
                         {t.rows.map((r) => (
                           <tr
                             key={r.id}
-                            className={`border-b border-gray-100 ${isDuplicate(r) ? 'bg-orange-50' : ''}`}
+                            className={`border-b border-gray-100 ${
+                              r.verified ? 'bg-green-100' : isDuplicate(r) ? 'bg-orange-50' : ''
+                            }`}
                           >
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                checked={r.verified}
+                                onChange={() => toggleVerified(r)}
+                                className="h-5 w-5 accent-green-600 cursor-pointer"
+                              />
+                            </td>
                             <td className="p-3 text-gray-900">{r.date}</td>
                             <td className="p-3 text-gray-900">{r.drivers?.name || '—'}</td>
                             <td className="p-3 text-gray-900">
